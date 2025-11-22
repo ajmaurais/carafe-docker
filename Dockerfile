@@ -1,5 +1,8 @@
+# Set Carafe version as a build argument
+ARG CARAFE_VERSION=0.0.1-beta
+
 # Use Ubuntu as the base image
-FROM ubuntu:20.04 AS builder
+FROM ubuntu:25.04 AS builder
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -7,15 +10,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8
 
-# Set Carafe version as a build argument
-ARG CARAFE_VERSION=0.0.1
-
 # Install necessary packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     git \
     unzip \
-    openjdk-11-jdk \
+    openjdk-21-jdk \
     openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
@@ -28,11 +28,7 @@ RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -
     && echo "conda activate carafe" >> ~/.bashrc
 
 # Add GitHub to known hosts
-RUN mkdir -p /root/.ssh && \
-    ssh-keyscan github.com >> /root/.ssh/known_hosts
-
-# Clone AlphaPeptDeep-DIA repository
-RUN --mount=type=ssh git clone --depth 1 git@github.com:wenbostar/alphapeptdeep_dia.git
+RUN git clone --depth 1 https://github.com/wenbostar/alphapeptdeep_dia
 
 # Create and activate conda environment
 RUN cd alphapeptdeep_dia \
@@ -49,13 +45,19 @@ RUN source /opt/conda/etc/profile.d/conda.sh \
     && find /opt/conda -follow -type f -name '*.a' -delete \
     && find /opt/conda -follow -type f -name '*.js.map' -delete
 
+ARG CARAFE_VERSION
+ENV CARAFE_VERSION=${CARAFE_VERSION}
+
 # Copy and install Carafe from local file
 COPY carafe-${CARAFE_VERSION}.zip /tmp/
 RUN unzip /tmp/carafe-${CARAFE_VERSION}.zip -d /opt/carafe \
     && rm /tmp/carafe-${CARAFE_VERSION}.zip
 
 # Start a new stage for the final image
-FROM ubuntu:20.04
+FROM ubuntu:25.04
+
+ARG CARAFE_VERSION
+ENV CARAFE_VERSION=${CARAFE_VERSION}
 
 # Copy necessary files from builder stage
 COPY --from=builder /opt/conda /opt/conda
@@ -72,7 +74,7 @@ ENV HF_HOME=/tmp/huggingface
 
 # Install minimal runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    openjdk-11-jre-headless \
+    openjdk-21-jre-headless \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir /tmp/huggingface && chmod 777 /tmp/huggingface \
     && mkdir /peptdeep && chmod 777 /peptdeep
